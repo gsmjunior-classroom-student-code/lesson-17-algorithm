@@ -1,65 +1,119 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-char* solution(char* participant[], char* completion[], int n) {
-    // participant와 completion은 각각 n과 n-1의 길이를 가진 문자열 배열이다.
-    // n은 1 이상 100,000 이하이다.
-    // 참가자의 이름은 1개 이상 20개 이하의 알파벳 소문자로 이루어져 있다.
-    // 참가자 중에는 동명이인이 있을 수 있다.
-    // 완주하지 못한 선수의 이름을 반환한다.
+// 해시 테이블의 크기 정의
+#define HASH_TABLE_SIZE 100003
 
-    // participant 배열을 정렬한다. (버블 정렬 사용)
-    for (int i = 0; i < n - 1; i++) {
-        for (int j = 0; j < n - i - 1; j++) {
-            if (strcmp(participant[j], participant[j + 1]) > 0) {
-                // participant[j]가 participant[j + 1]보다 사전순으로 뒤에 있으면 교환한다.
-                char* temp = participant[j];
-                participant[j] = participant[j + 1];
-                participant[j + 1] = temp;
+// 해시 노드 구조체 정의
+typedef struct Node {
+    char name[21];
+    struct Node* next;
+} Node;
+
+// 해시 테이블 구조체 정의
+typedef struct HashTable {
+    Node* table[HASH_TABLE_SIZE];
+} HashTable;
+
+// 해시 함수 정의
+unsigned long hash(const char* str) {
+    unsigned long hash = 5381;
+    int c;
+
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c; // hash * 33 + c
+    }
+
+    return hash % HASH_TABLE_SIZE;
+}
+
+// 해시 테이블 초기화 함수
+void initHashTable(HashTable* ht) {
+    for (int i = 0; i < HASH_TABLE_SIZE; ++i) {
+        ht->table[i] = NULL;
+    }
+}
+
+// 해시 테이블에 값 추가 함수
+void addToHashTable(HashTable* ht, const char* name) {
+    unsigned long index = hash(name);
+
+    Node* newNode = (Node*)malloc(sizeof(Node));
+    strcpy(newNode->name, name);
+    newNode->next = NULL;
+
+    if (ht->table[index] == NULL) {
+        ht->table[index] = newNode;
+    } else {
+        newNode->next = ht->table[index];
+        ht->table[index] = newNode;
+    }
+}
+
+// 완주하지 못한 선수 찾는 함수
+char* findUnfinishedPlayer(HashTable* ht, char** participant, char** completion, int participantSize) {
+    // 참가자 명단을 해시 테이블에 추가
+    for (int i = 0; i < participantSize; ++i) {
+        addToHashTable(ht, participant[i]);
+    }
+
+    // 완주자 명단을 해시 테이블에서 제거
+    for (int i = 0; i < participantSize - 1; ++i) {
+        unsigned long index = hash(completion[i]);
+        Node* currentNode = ht->table[index];
+        Node* prevNode = NULL;
+
+        while (currentNode != NULL && strcmp(currentNode->name, completion[i]) != 0) {
+            prevNode = currentNode;
+            currentNode = currentNode->next;
+        }
+
+        if (currentNode != NULL) {
+            if (prevNode == NULL) {
+                ht->table[index] = currentNode->next;
+            } else {
+                prevNode->next = currentNode->next;
             }
+
+            free(currentNode);
         }
     }
 
-    // completion 배열을 정렬한다. (버블 정렬 사용)
-    for (int i = 0; i < n - 2; i++) {
-        for (int j = 0; j < n - i - 2; j++) {
-            if (strcmp(completion[j], completion[j + 1]) > 0) {
-                // completion[j]가 completion[j + 1]보다 사전순으로 뒤에 있으면 교환한다.
-                char* temp = completion[j];
-                completion[j] = completion[j + 1];
-                completion[j + 1] = temp;
-            }
+    // 해시 테이블에서 남아 있는 선수 찾기
+    for (int i = 0; i < HASH_TABLE_SIZE; ++i) {
+        if (ht->table[i] != NULL) {
+            return ht->table[i]->name;
         }
     }
 
-    // participant와 completion을 비교한다.
-    for (int i = 0; i < n - 1; i++) {
-        if (strcmp(participant[i], completion[i]) != 0) {
-            // participant[i]와 completion[i]가 다르면 participant[i]가 완주하지 못한 선수이다.
-            return participant[i];
-        }
-    }
-
-    // 모든 completion[i]와 일치하는 participant[i]가 있으면 participant[n - 1]이 완주하지 못한 선수이다.
-    return participant[n - 1];
+    return NULL; // 완주하지 못한 선수가 없는 경우
 }
 
 int main() {
-    // 입출력 예 1
+    // 예제 입력 데이터
     char* participant1[] = {"leo", "kiki", "eden"};
     char* completion1[] = {"eden", "kiki"};
-    int n1 = 3;
-    printf("%s\n", solution(participant1, completion1, n1)); // leo
 
-    // 입출력 예 2
     char* participant2[] = {"marina", "josipa", "nikola", "vinko", "filipa"};
     char* completion2[] = {"josipa", "filipa", "marina", "nikola"};
-    int n2 = 5;
-    printf("%s\n", solution(participant2, completion2, n2)); // vinko
 
-    // 입출력 예 3
     char* participant3[] = {"mislav", "stanko", "mislav", "ana"};
     char* completion3[] = {"stanko", "ana", "mislav"};
-    int n3 = 4;
-    printf("%s\n", solution(participant3, completion3, n3)); // mislav
+
+    // 해시 테이블 초기화
+    HashTable ht;
+    initHashTable(&ht);
+
+    // 각 예제에 대해 완주하지 못한 선수 찾기
+    char* result1 = findUnfinishedPlayer(&ht, participant1, completion1, 3);
+    char* result2 = findUnfinishedPlayer(&ht, participant2, completion2, 5);
+    char* result3 = findUnfinishedPlayer(&ht, participant3, completion3, 4);
+
+    // 결과 출력
+    printf("Result 1: %s\n", result1);
+    printf("Result 2: %s\n", result2);
+    printf("Result 3: %s\n", result3);
+
+    return 0;
 }
